@@ -410,6 +410,18 @@ class StockAnalysisPipeline:
                 'signal_score': trend_result.signal_score,
                 'signal_reasons': trend_result.signal_reasons,
                 'risk_factors': trend_result.risk_factors,
+                'kdj_k': trend_result.kdj_k,
+                'kdj_d': trend_result.kdj_d,
+                'kdj_j': trend_result.kdj_j,
+                'kdj_signal': trend_result.kdj_signal,
+                'boll_upper': trend_result.boll_upper,
+                'boll_mid': trend_result.boll_mid,
+                'boll_lower': trend_result.boll_lower,
+                'boll_status': trend_result.boll_status,
+                'stop_loss': trend_result.stop_loss,
+                'take_profit': trend_result.take_profit,
+                'position_size': trend_result.position_size,
+                'risk_reward_ratio': trend_result.risk_reward_ratio,
             }
 
         # ETF/index flag for analyzer prompt (Fixes #274)

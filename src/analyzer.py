@@ -1244,12 +1244,26 @@ class GeminiAnalyzer:
 | 系统评分 | {trend.get('signal_score', 0)}/100 | |
 
 #### 系统分析理由
-**买入理由**：
-{chr(10).join('- ' + r for r in trend.get('signal_reasons', ['无'])) if trend.get('signal_reasons') else '- 无'}
+    **买入理由**：
+    {chr(10).join('- ' + r for r in trend.get('signal_reasons', ['无'])) if trend.get('signal_reasons') else '- 无'}
+    
+    **风险因素**：
+    {chr(10).join('- ' + r for r in trend.get('risk_factors', ['无'])) if trend.get('risk_factors') else '- 无'}
 
-**风险因素**：
-{chr(10).join('- ' + r for r in trend.get('risk_factors', ['无'])) if trend.get('risk_factors') else '- 无'}
-"""
+    ### 🛠️ 增强技术指标
+    | 指标 | 数值 | 信号/状态 |
+    |------|------|----------|
+    | **KDJ (9,3,3)** | K:{trend.get('kdj_k', 'N/A'):.1f}, D:{trend.get('kdj_d', 'N/A'):.1f}, J:{trend.get('kdj_j', 'N/A'):.1f} | {trend.get('kdj_signal', 'N/A')} |
+    | **BOLL (20,2)** | 中轨:{trend.get('boll_mid', 'N/A'):.2f} | {trend.get('boll_status', 'N/A')} |
+    | 布林上下轨 | 上:{trend.get('boll_upper', 'N/A'):.2f}, 下:{trend.get('boll_lower', 'N/A'):.2f} | |
+
+    ### 🛡️ 风险管理建议
+    | 项目 | 建议值 | 说明 |
+    |------|------|------|
+    | **建议仓位** | **{trend.get('position_size', 'N/A')}** | 基于趋势强度 |
+    | **止损价** | **{trend.get('stop_loss', 'N/A')} 元** | 基于 ATR 波动率 |
+    | 止盈价 | {trend.get('take_profit', 'N/A')} 元 | 盈亏比 {trend.get('risk_reward_ratio', 'N/A')}:1 |
+    """
         
         # 添加昨日对比数据
         if 'yesterday' in context:

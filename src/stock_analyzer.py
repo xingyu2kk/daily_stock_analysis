@@ -126,6 +126,24 @@ class TrendAnalysisResult:
     rsi_status: RSIStatus = RSIStatus.NEUTRAL
     rsi_signal: str = ""              # RSI 信号描述
 
+    # KDJ 指标
+    kdj_k: float = 0.0
+    kdj_d: float = 0.0
+    kdj_j: float = 0.0
+    kdj_signal: str = ""
+
+    # BOLL 指标
+    boll_upper: float = 0.0
+    boll_mid: float = 0.0
+    boll_lower: float = 0.0
+    boll_status: str = ""
+
+    # 风险管理
+    stop_loss: float = 0.0
+    take_profit: float = 0.0
+    risk_reward_ratio: float = 0.0
+    position_size: str = ""
+
     # 买入信号
     buy_signal: BuySignal = BuySignal.WAIT
     signal_score: int = 0            # 综合评分 0-100
@@ -165,6 +183,18 @@ class TrendAnalysisResult:
             'rsi_24': self.rsi_24,
             'rsi_status': self.rsi_status.value,
             'rsi_signal': self.rsi_signal,
+            'kdj_k': self.kdj_k,
+            'kdj_d': self.kdj_d,
+            'kdj_j': self.kdj_j,
+            'kdj_signal': self.kdj_signal,
+            'boll_upper': self.boll_upper,
+            'boll_mid': self.boll_mid,
+            'boll_lower': self.boll_lower,
+            'boll_status': self.boll_status,
+            'stop_loss': self.stop_loss,
+            'take_profit': self.take_profit,
+            'risk_reward_ratio': self.risk_reward_ratio,
+            'position_size': self.position_size,
         }
 
 
@@ -256,7 +286,16 @@ class StockTrendAnalyzer:
         # 6. RSI 分析
         self._analyze_rsi(df, result)
 
-        # 7. 生成买入信号
+        # 7. KDJ 分析
+        self._analyze_kdj(df, result)
+
+        # 8. BOLL 分析
+        self._analyze_boll(df, result)
+
+        # 9. 计算 ATR 和风险管理
+        self._calculate_risk_management(df, result)
+
+        # 10. 生成买入信号
         self._generate_signal(result)
 
         return result
@@ -580,6 +619,78 @@ class StockTrendAnalyzer:
             result.rsi_status = RSIStatus.OVERSOLD
             result.rsi_signal = f"⭐ RSI超卖({rsi_mid:.1f}<30)，反弹机会大"
 
+    def _analyze_kdj(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """分析 KDJ 指标 (9, 3, 3)"""
+        if len(df) < 9:
+            return
+        
+        # 计算 KDJ
+        low_list = df['low'].rolling(window=9).min()
+        high_list = df['high'].rolling(window=9).max()
+        rsv = (df['close'] - low_list) / (high_list - low_list) * 100
+        
+        df['KDJ_K'] = rsv.ewm(com=2).mean()
+        df['KDJ_D'] = df['KDJ_K'].ewm(com=2).mean()
+        df['KDJ_J'] = 3 * df['KDJ_K'] - 2 * df['KDJ_D']
+        
+        latest = df.iloc[-1]
+        result.kdj_k = float(latest['KDJ_K'])
+        result.kdj_d = float(latest['KDJ_D'])
+        result.kdj_j = float(latest['KDJ_J'])
+        
+        if result.kdj_k > result.kdj_d:
+            result.kdj_signal = "KDJ 金叉"
+        else:
+            result.kdj_signal = "KDJ 死叉"
+
+    def _analyze_boll(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """分析布林线 (20, 2)"""
+        if len(df) < 20:
+            return
+            
+        mid = df['close'].rolling(window=20).mean()
+        std = df['close'].rolling(window=20).std()
+        upper = mid + 2 * std
+        lower = mid - 2 * std
+        
+        latest_price = result.current_price
+        result.boll_upper = float(upper.iloc[-1])
+        result.boll_mid = float(mid.iloc[-1])
+        result.boll_lower = float(lower.iloc[-1])
+        
+        if latest_price > result.boll_upper:
+            result.boll_status = "超强（股价在布林上轨上方）"
+        elif latest_price > result.boll_mid:
+            result.boll_status = "强势（股价在布林中轨上方）"
+        elif latest_price > result.boll_lower:
+            result.boll_status = "弱势（股价在布林中轨下方）"
+        else:
+            result.boll_status = "超弱（股价在布林下轨下方）"
+
+    def _calculate_risk_management(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """基于 ATR 计算风险管理参数"""
+        if len(df) < 14:
+            return
+            
+        # 计算 ATR (14)
+        high_low = df['high'] - df['low']
+        high_close = (df['high'] - df['close'].shift()).abs()
+        low_close = (df['low'] - df['close'].shift()).abs()
+        
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        atr = tr.rolling(window=14).mean().iloc[-1]
+        
+        price = result.current_price
+        # 止损设为 2 倍 ATR
+        result.stop_loss = round(price - 2 * atr, 2)
+        # 盈亏比目标 2:1
+        result.take_profit = round(price + 4 * atr, 2)
+        result.risk_reward_ratio = 2.0
+        
+        # 仓位建议 (简单的风险固定百分比模型)
+        # 假设账户 1% 风险，单笔亏损不超过 ATR 2倍
+        result.position_size = "20%" if result.trend_status == TrendStatus.STRONG_BULL else "10%"
+
     def _generate_signal(self, result: TrendAnalysisResult) -> None:
         """
         生成买入信号
@@ -781,6 +892,20 @@ class StockTrendAnalyzer:
             f"   RSI(12): {result.rsi_12:.1f}",
             f"   RSI(24): {result.rsi_24:.1f}",
             f"   信号: {result.rsi_signal}",
+            f"",
+            f"📈 KDJ指标: {result.kdj_signal}",
+            f"   K: {result.kdj_k:.1f}  D: {result.kdj_d:.1f}  J: {result.kdj_j:.1f}",
+            f"",
+            f"📊 BOLL指标: {result.boll_status}",
+            f"   上轨: {result.boll_upper:.2f}",
+            f"   中轨: {result.boll_mid:.2f}",
+            f"   下轨: {result.boll_lower:.2f}",
+            f"",
+            f"🛡️ 风险管理:",
+            f"   建议仓位: {result.position_size}",
+            f"   止损位: {result.stop_loss:.2f}",
+            f"   止盈位: {result.take_profit:.2f}",
+            f"   盈亏比: {result.risk_reward_ratio}:1",
             f"",
             f"🎯 操作建议: {result.buy_signal.value}",
             f"   综合评分: {result.signal_score}/100",
